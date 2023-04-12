@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	kdclient "k8s.io/client-go/dynamic"
 	kclient "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -32,11 +33,21 @@ func NewConfig(path string) (*restclient.Config, error) {
 	return restclient.InClusterConfig()
 }
 
-func NewClient(path string) (kclient.Interface, error) {
+func NewClients(path string) (kclient.Interface, kdclient.Interface, error) {
 	cfg, err := NewConfig(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return kclient.NewForConfig(cfg)
+	kc, err := kclient.NewForConfig(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	kdc, err := kdclient.NewForConfig(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return kc, kdc, err
 }

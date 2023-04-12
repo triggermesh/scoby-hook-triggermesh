@@ -13,9 +13,9 @@ type Cmd struct {
 	Path    string `help:"Path where hook requests are served." env:"PATH" default:"v1"`
 }
 
-func (c *Cmd) Run(globals *commoncmd.Globals) error {
-	globals.Logger.Debug("Creating TriggerMesh hook server")
+func (c *Cmd) Run(g *commoncmd.Globals) error {
+	g.Logger.Debug("Creating TriggerMesh hook server")
 
-	s := server.New(c.Path, c.Address, globals.Logger)
-	return s.Start(globals.Context)
+	s := server.New(c.Path, c.Address, g.KubeClient, g.Logger)
+	return s.Start(g.Context)
 }

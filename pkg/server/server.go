@@ -12,6 +12,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kdclient "k8s.io/client-go/dynamic"
+	kclient "k8s.io/client-go/kubernetes"
 
 	commonv1alpha1 "github.com/triggermesh/scoby/pkg/apis/common/v1alpha1"
 	hookv1 "github.com/triggermesh/scoby/pkg/hook/v1"
@@ -20,15 +22,18 @@ import (
 type Server struct {
 	path    string
 	address string
+	client  kclient.Interface
+	dyn     kdclient.Interface
 
 	logger   *zap.SugaredLogger `kong:"-"`
 	handlers map[string]interface{}
 }
 
-func New(path, address string, logger *zap.SugaredLogger) *Server {
+func New(path, address string, client kclient.Interface, logger *zap.SugaredLogger) *Server {
 	return &Server{
 		path:    path,
 		address: address,
+		client:  client,
 
 		logger: logger,
 	}
@@ -52,6 +57,15 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 		close(errCh)
 	}()
+
+	pods, err := s.client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, p := range pods.Items {
+		s.logger.Infow("pod", zap.String("name", p.Name))
+	}
 
 	select {
 	case err := <-errCh:
