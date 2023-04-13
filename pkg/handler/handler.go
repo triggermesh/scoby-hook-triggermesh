@@ -1,4 +1,7 @@
-package handlers
+// Copyright 2023 TriggerMesh Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+package handler
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,5 +27,5 @@ type Handler interface {
 
 // HandlerFinalizable exposes methods for hook handler finalize operation.
 type HandlerFinalizable interface {
-	Finalize(obj metav1.Object) hookv1.HookResponse
+	Finalize(obj metav1.Object) *hookv1.HookResponse
 }

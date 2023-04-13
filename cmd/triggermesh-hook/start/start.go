@@ -5,6 +5,9 @@ package start
 
 import (
 	commoncmd "github.com/triggermesh/scoby-hook-triggermesh/pkg/common/cmd"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/handler"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/handler/kuards"
+
 	"github.com/triggermesh/scoby-hook-triggermesh/pkg/server"
 )
 
@@ -16,6 +19,11 @@ type Cmd struct {
 func (c *Cmd) Run(g *commoncmd.Globals) error {
 	g.Logger.Debug("Creating TriggerMesh hook server")
 
-	s := server.New(c.Path, c.Address, g.KubeClient, g.Logger)
+	r := handler.NewRegistry([]handler.Handler{
+		// Kuards is a temporary playground
+		kuards.New(),
+	})
+
+	s := server.New(c.Path, c.Address, r, g.DynClient, g.Logger)
 	return s.Start(g.Context)
 }

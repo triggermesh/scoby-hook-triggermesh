@@ -1,42 +1,46 @@
+// Copyright 2023 TriggerMesh Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package server
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
 	"go.uber.org/zap"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	kdclient "k8s.io/client-go/dynamic"
-	kclient "k8s.io/client-go/kubernetes"
 
-	commonv1alpha1 "github.com/triggermesh/scoby/pkg/apis/common/v1alpha1"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/handler"
 	hookv1 "github.com/triggermesh/scoby/pkg/hook/v1"
 )
 
 type Server struct {
 	path    string
 	address string
-	client  kclient.Interface
-	dyn     kdclient.Interface
+	reg     handler.Registry
 
-	logger   *zap.SugaredLogger `kong:"-"`
-	handlers map[string]interface{}
+	dyn kdclient.Interface
+
+	logger *zap.SugaredLogger `kong:"-"`
 }
 
-func New(path, address string, client kclient.Interface, logger *zap.SugaredLogger) *Server {
+func New(path, address string, reg handler.Registry, dyn kdclient.Interface, logger *zap.SugaredLogger) *Server {
 	return &Server{
 		path:    path,
 		address: address,
-		client:  client,
+		reg:     reg,
+		dyn:     dyn,
 
 		logger: logger,
 	}
+
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -58,14 +62,14 @@ func (s *Server) Start(ctx context.Context) error {
 		close(errCh)
 	}()
 
-	pods, err := s.client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
+	// pods, err := s.client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
+	// if err != nil {
+	// 	return err
+	// }
 
-	for _, p := range pods.Items {
-		s.logger.Infow("pod", zap.String("name", p.Name))
-	}
+	// for _, p := range pods.Items {
+	// 	s.logger.Infow("pod", zap.String("name", p.Name))
+	// }
 
 	select {
 	case err := <-errCh:
@@ -91,63 +95,59 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Debug("Received request", zap.Any("request", hreq))
 
-	// Is the object registered?
-
-	// Retrieve object
-
-	// Call function Reconcile/Finalize
-
-	switch hreq.Operation {
-	case hookv1.OperationReconcile:
-
-		log.Printf("received reconcile request: %v\n", *hreq)
-	case hookv1.OperationFinalize:
-		log.Printf("received finalize request: %v\n", *hreq)
-	default:
-		msg := "request must be either " + string(hookv1.OperationReconcile) +
-			" or " + string(hookv1.OperationFinalize)
-		log.Println(msg)
+	gv, err := schema.ParseGroupVersion(hreq.Object.APIVersion)
+	if err != nil {
+		msg := "cannot parse APIVersion from HookRequest: " + err.Error()
+		s.logger.Error("Error parsing HookRequest", zap.Error(errors.New(msg)))
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 
-	hres := &hookv1.HookResponse{
-		Status: &hookv1.HookStatus{
-			Conditions: commonv1alpha1.Conditions{
-				{
-					Type:   "HookReportedStatus",
-					Status: metav1.ConditionTrue,
-					Reason: "HOOKREPORTSOK",
-				},
-			},
-			Annotations: map[string]string{
-				"io.triggermesh.hook/my-annotation": "annotation from hook",
-			},
-		},
-		EnvVars: []corev1.EnvVar{
-			{
-				Name:  "FROM_HOOK",
-				Value: "env from hook",
-			},
-		},
+	gvk := gv.WithKind(hreq.Object.Kind)
+	h, ok := s.reg[gvk]
+	if !ok {
+		msg := fmt.Sprintf("the hook does not contain a handler for %q", gvk.String())
+		s.logger.Error("Error serving HookRequest", zap.Error(errors.New(msg)))
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	obj, err := s.dyn.Resource(*h.GroupVersionResource()).
+		Namespace(hreq.Object.Namespace).
+		Get(r.Context(), hreq.Object.Name, metav1.GetOptions{})
+	if err != nil {
+		msg := "object at the HookRequest cannot be found: " + err.Error()
+		s.logger.Error("Error processing request", zap.Error(errors.New(msg)))
+
+		// Using no content, to make clear that the API and the handler
+		// for the registered object exists, but the object cannot be retrieved.
+		http.Error(w, msg, http.StatusNoContent)
+		return
+	}
+
+	var hres *hookv1.HookResponse
+	switch hreq.Operation {
+	case hookv1.OperationReconcile:
+		hres = h.Reconcile(obj)
+
+	case hookv1.OperationFinalize:
+		f, ok := h.(handler.HandlerFinalizable)
+		if !ok {
+			msg := "hook handler does not support Finalizers"
+			s.logger.Error("Error processing request", zap.Error(errors.New(msg)))
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+		hres = f.Finalize(obj)
+
+	default:
+		msg := "request must be either " + string(hookv1.OperationReconcile) +
+			" or " + string(hookv1.OperationFinalize)
+		s.logger.Error("Error parsing request", zap.Error(errors.New(msg)))
+		http.Error(w, msg, http.StatusBadRequest)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(hres)
-}
-
-type handlerIndex struct {
-	apiVersion string
-	kind       string
-}
-
-type Handler struct {
-}
-
-func (h *Handler) Reconcile(namespace, name string) {
-
-}
-
-func (h *Handler) Finalize(namespace, name string) {
-
 }

@@ -1,4 +1,7 @@
-package myhandler
+// Copyright 2023 TriggerMesh Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+package kuards
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -8,7 +11,7 @@ import (
 	hookv1 "github.com/triggermesh/scoby/pkg/hook/v1"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/triggermesh/scoby-hook-triggermesh/pkg/handlers"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/handler"
 )
 
 type KuardHandler struct {
@@ -16,7 +19,7 @@ type KuardHandler struct {
 	kind string
 }
 
-var _ handlers.Handler = (*KuardHandler)(nil)
+var _ handler.Handler = (*KuardHandler)(nil)
 
 func New() *KuardHandler {
 	return &KuardHandler{
@@ -60,6 +63,16 @@ func (h *KuardHandler) Reconcile(obj metav1.Object) *hookv1.HookResponse {
 			{
 				Name:  "FROM_HOOK_NAMESPACE",
 				Value: obj.GetNamespace(),
+			},
+		},
+	}
+}
+
+func (h *KuardHandler) Finalize(obj metav1.Object) *hookv1.HookResponse {
+	return &hookv1.HookResponse{
+		Status: &hookv1.HookStatus{
+			Annotations: map[string]string{
+				"io.triggermesh.hook/my-annotation": "deletion ok",
 			},
 		},
 	}
