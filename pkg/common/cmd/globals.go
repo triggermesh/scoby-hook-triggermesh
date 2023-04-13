@@ -1,3 +1,6 @@
+// Copyright 2023 TriggerMesh Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -14,6 +17,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	kdclient "k8s.io/client-go/dynamic"
 	kclient "k8s.io/client-go/kubernetes"
 
 	"github.com/triggermesh/scoby-hook-triggermesh/pkg/config/observability"
@@ -43,6 +47,7 @@ type Globals struct {
 	Logger       *zap.SugaredLogger `kong:"-"`
 	LogLevel     zap.AtomicLevel    `kong:"-"`
 	KubeClient   kclient.Interface  `kong:"-"`
+	DynClient    kdclient.Interface `kong:"-"`
 	ConfigMethod ConfigMethod       `kong:"-"`
 }
 
@@ -83,11 +88,11 @@ func (g *Globals) Initialize() error {
 	defaultConfigApplied := false
 	var err error
 
-	kcfg, err := kubernetes.NewClient(g.Kubeconfig)
+	kc, kdc, err := kubernetes.NewClients(g.Kubeconfig)
 	if err != nil {
 		return err
 	}
-	g.KubeClient = kcfg
+	g.KubeClient, g.DynClient = kc, kdc
 
 	switch {
 	case g.ObservabilityConfig != "":
