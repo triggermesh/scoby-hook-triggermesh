@@ -1,0 +1,90 @@
+# Copyright 2022 TriggerMesh Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scoby-hook-triggermesh
+  namespace: triggermesh
+  labels:
+    app.kubernetes.io/part-of: triggermesh
+    app.kubernetes.io/version: devel
+    app.kubernetes.io/component: scoby-hook-triggermesh
+    app.kubernetes.io/name: triggermesh-eventing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scoby-hook-triggermesh
+  template:
+    metadata:
+      labels:
+        app: scoby-hook-triggermesh
+        app.kubernetes.io/part-of: triggermesh
+        app.kubernetes.io/version: devel
+        app.kubernetes.io/component: scoby-hook-triggermesh
+        app.kubernetes.io/name: triggermesh-eventing
+
+    spec:
+
+      serviceAccountName: scoby-hook-triggermesh
+      enableServiceLinks: false
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: eventing-controller
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+
+
+      containers:
+      - name: scoby-hook-triggermesh
+        terminationMessagePolicy: FallbackToLogsOnError
+        image: ko://github.com/triggermesh/scoby-hook-triggermesh/cmd/triggermesh-hook
+
+        args: ["start"]
+
+        env:
+        - name: PATH
+          value: "v1"
+        - name: ADDRESS
+          value: ":8080"
+
+        resources:
+          requests:
+            cpu: 50m
+            memory: 50Mi
+          limits:
+            cpu: 50m
+            memory: 200Mi
+
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [all]
+
+        ports:
+        - name: api
+          containerPort: 8080
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: scoby-hook-triggermesh
+  namespace: triggermesh
+spec:
+  selector:
+    app.kubernetes.io/component: scoby-hook-triggermesh
+    app.kubernetes.io/name: triggermesh-eventing
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
