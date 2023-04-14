@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/kong v0.7.1
 	github.com/stretchr/testify v1.8.2
 	github.com/triggermesh/scoby v0.0.0-20230410193949-ba37efdfa633
+	go.uber.org/automaxprocs v1.4.0
 	go.uber.org/zap v1.24.0
 	k8s.io/api v0.26.3
 	k8s.io/apimachinery v0.26.3
