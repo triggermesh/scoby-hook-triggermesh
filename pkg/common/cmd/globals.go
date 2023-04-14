@@ -93,6 +93,7 @@ func (g *Globals) Initialize() error {
 	if err != nil {
 		return fmt.Errorf("could not match available CPUs to processes %w", err)
 	}
+	defer undo()
 
 	kc, kdc, err := kubernetes.NewClients(g.Kubeconfig)
 	if err != nil {
