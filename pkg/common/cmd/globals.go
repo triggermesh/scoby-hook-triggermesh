@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/automaxprocs/maxprocs"
 	"go.uber.org/zap"
 
 	corev1 "k8s.io/api/core/v1"
@@ -87,6 +88,11 @@ func (g *Globals) Initialize() error {
 	var l *zap.Logger
 	defaultConfigApplied := false
 	var err error
+
+	undo, err := maxprocs.Set()
+	if err != nil {
+		return fmt.Errorf("could not match available CPUs to processes %w", err)
+	}
 
 	kc, kdc, err := kubernetes.NewClients(g.Kubeconfig)
 	if err != nil {
