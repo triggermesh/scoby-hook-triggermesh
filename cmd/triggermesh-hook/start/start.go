@@ -7,6 +7,7 @@ import (
 	commoncmd "github.com/triggermesh/scoby-hook-triggermesh/pkg/common/cmd"
 	"github.com/triggermesh/scoby-hook-triggermesh/pkg/handler"
 	"github.com/triggermesh/scoby-hook-triggermesh/pkg/handler/kuards"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/handler/sources/awss3"
 
 	"github.com/triggermesh/scoby-hook-triggermesh/pkg/server"
 )
@@ -22,6 +23,7 @@ func (c *Cmd) Run(g *commoncmd.Globals) error {
 	r := handler.NewRegistry([]handler.Handler{
 		// Kuards is a temporary playground
 		kuards.New(),
+		awss3.New(),
 	})
 
 	s := server.New(c.Path, c.Address, r, g.DynClient, g.Logger)

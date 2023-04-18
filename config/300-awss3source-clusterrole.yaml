@@ -28,7 +28,7 @@ metadata:
     app.kubernetes.io/name: scoby
 rules:
 - apiGroups:
-  - "sources.triggermesh.io"
+  - sources.triggermesh.io
   resources:
   - awss3sources
   verbs:
@@ -37,7 +37,7 @@ rules:
   - watch
   - update
 - apiGroups:
-  - "extensions.triggermesh.io"
+  - sources.triggermesh.io
   resources:
   - awss3sources/status
   verbs:
@@ -47,7 +47,7 @@ rules:
   # If a hook is used for finalization, the finalize resource
   # must be added to the ClusterRole.
 - apiGroups:
-  - "extensions.triggermesh.io"
+  - sources.triggermesh.io
   resources:
   - awss3sources/finalizers
   verbs:
