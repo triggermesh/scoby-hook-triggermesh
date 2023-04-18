@@ -4,6 +4,8 @@
 package handler
 
 import (
+	"context"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -22,10 +24,10 @@ type Handler interface {
 	// Kind for the managed object
 	Kind() string
 
-	Reconcile(obj metav1.Object) *hookv1.HookResponse
+	Reconcile(ctx context.Context, obj metav1.Object) *hookv1.HookResponse
 }
 
 // HandlerFinalizable exposes methods for hook handler finalize operation.
 type HandlerFinalizable interface {
-	Finalize(obj metav1.Object) *hookv1.HookResponse
+	Finalize(ctx context.Context, obj metav1.Object) *hookv1.HookResponse
 }

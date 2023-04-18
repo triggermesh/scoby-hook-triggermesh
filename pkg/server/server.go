@@ -128,7 +128,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var hres *hookv1.HookResponse
 	switch hreq.Operation {
 	case hookv1.OperationReconcile:
-		hres = h.Reconcile(obj)
+		hres = h.Reconcile(r.Context(), obj)
 
 	case hookv1.OperationFinalize:
 		f, ok := h.(handler.HandlerFinalizable)
@@ -138,7 +138,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
-		hres = f.Finalize(obj)
+		hres = f.Finalize(r.Context(), obj)
 
 	default:
 		msg := "request must be either " + string(hookv1.OperationReconcile) +
