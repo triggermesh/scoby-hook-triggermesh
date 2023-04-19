@@ -1,9 +1,9 @@
 apiVersion: scoby.triggermesh.io/v1alpha1
 kind: CRDRegistration
 metadata:
-  name: kuard
+  name: awss3sources
 spec:
-  crd: kuards.extensions.triggermesh.io
+  crd: awss3sources.sources.triggermesh.io
   hook:
     address:
       uri: "http://:8080/v1"
@@ -24,12 +24,9 @@ spec:
     formFactor:
       deployment:
         replicas: 1
-        service:
-          port: 80
-          targetPort: 8080
     fromImage:
-      repo: gcr.io/kuar-demo/kuard-amd64:blue
+      repo: gcr.io/triggermesh/awssqssource-adapter:v1.24.3
 
     statusConfiguration:
       conditionsFromHook:
-      - type: HookReportedStatus
+      - type: Subscribed

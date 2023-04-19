@@ -4,6 +4,8 @@
 package kuards
 
 import (
+	"context"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -41,7 +43,7 @@ func (h *KuardHandler) Kind() string {
 	return h.kind
 }
 
-func (h *KuardHandler) Reconcile(obj metav1.Object) *hookv1.HookResponse {
+func (h *KuardHandler) Reconcile(ctx context.Context, obj metav1.Object) *hookv1.HookResponse {
 	return &hookv1.HookResponse{
 		Status: &hookv1.HookStatus{
 			Conditions: commonv1alpha1.Conditions{
@@ -68,7 +70,7 @@ func (h *KuardHandler) Reconcile(obj metav1.Object) *hookv1.HookResponse {
 	}
 }
 
-func (h *KuardHandler) Finalize(obj metav1.Object) *hookv1.HookResponse {
+func (h *KuardHandler) Finalize(ctx context.Context, obj metav1.Object) *hookv1.HookResponse {
 	return &hookv1.HookResponse{
 		Status: &hookv1.HookStatus{
 			Annotations: map[string]string{
