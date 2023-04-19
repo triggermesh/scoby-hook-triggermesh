@@ -22,21 +22,15 @@ import (
 	"fmt"
 	"reflect"
 
-	corev1 "k8s.io/api/core/v1"
-
-	"knative.dev/pkg/reconciler"
-
 	"github.com/aws/aws-sdk-go/aws/arn"
 	awssqs "github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 
-	"github.com/triggermesh/triggermesh/pkg/apis"
-	commonv1alpha1 "github.com/triggermesh/triggermesh/pkg/apis/common/v1alpha1"
-	"github.com/triggermesh/triggermesh/pkg/apis/sources/v1alpha1"
-	"github.com/triggermesh/triggermesh/pkg/reconciler/event"
-	"github.com/triggermesh/triggermesh/pkg/sources/aws/iam"
-	"github.com/triggermesh/triggermesh/pkg/sources/aws/s3"
-	"github.com/triggermesh/triggermesh/pkg/sources/aws/sqs"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/apis"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/apis/sources/v1alpha1"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/sources/aws/iam"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/sources/aws/s3"
+	"github.com/triggermesh/scoby-hook-triggermesh/pkg/sources/aws/sqs"
 )
 
 // EnsureQueue ensures the existence of a SQS queue for sending S3 event
@@ -59,17 +53,17 @@ func EnsureQueue(ctx context.Context, src *v1alpha1.AWSS3Source, cli sqsiface.SQ
 	case isNotFound(err):
 		queueURL, err = sqs.CreateQueue(cli, queueName, queueTags(src))
 		if err != nil {
-			return "", fmt.Errorf("Error creating SQS queue for event notifications: %w", toErrMsg(err))
+			return "", fmt.Errorf("error creating SQS queue for event notifications: %w", toErrMsg(err))
 		}
 
 	case isAWSError(err):
 		// All documented API errors require some user intervention and
 		// are not to be retried.
 		// https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
-		return "", fmt.Errorf("Request to SQS API got rejected: %w", toErrMsg(err))
+		return "", fmt.Errorf("request to SQS API got rejected: %w", toErrMsg(err))
 
 	case err != nil:
-		return "", fmt.Errorf("Failed to determine URL of SQS queue: %w", toErrMsg(err))
+		return "", fmt.Errorf("failed to determine URL of SQS queue: %w", toErrMsg(err))
 	}
 
 	getAttrs := []string{awssqs.QueueAttributeNameQueueArn, awssqs.QueueAttributeNamePolicy}
@@ -94,7 +88,7 @@ func EnsureQueue(ctx context.Context, src *v1alpha1.AWSS3Source, cli sqsiface.SQ
 	desiredPol := makeQueuePolicy(queueARN, src)
 
 	if err := syncQueuePolicy(cli, queueURL, currentPol, desiredPol); err != nil {
-		return "", fmt.Errorf("Error synchronizing policy of SQS queue: %w", err)
+		return "", fmt.Errorf("error synchronizing policy of SQS queue: %w", err)
 	}
 
 	return queueARN, nil
@@ -102,42 +96,39 @@ func EnsureQueue(ctx context.Context, src *v1alpha1.AWSS3Source, cli sqsiface.SQ
 
 // EnsureNoQueue ensures that the SQS queue created for sending S3 event
 // notifications is deleted.
-func EnsureNoQueue(ctx context.Context, cli sqsiface.SQSAPI) error {
-	src := commonv1alpha1.ReconcilableFromContext(ctx)
-	typedSrc := src.(*v1alpha1.AWSS3Source)
-
-	if dest := typedSrc.Spec.Destination; dest != nil {
+func EnsureNoQueue(ctx context.Context, src *v1alpha1.AWSS3Source, cli sqsiface.SQSAPI) error {
+	if dest := src.Spec.Destination; dest != nil {
 		if userProvidedQueue := dest.SQS; userProvidedQueue != nil {
 			// do not delete queues managed by the user
 			return nil
 		}
 	}
 
-	queueURL, err := sqs.QueueURL(cli, queueName(typedSrc))
+	queueURL, err := sqs.QueueURL(cli, queueName(src))
 	switch {
 	case isNotFound(err):
-		event.Warn(ctx, ReasonUnsubscribed, "Queue not found, skipping deletion")
+		// event.Warn(ctx, ReasonUnsubscribed, "Queue not found, skipping deletion")
 		return nil
 	case isDenied(err):
 		// it is unlikely that we recover from auth errors in the
 		// finalizer, so we simply record a warning event and return
-		event.Warn(ctx, ReasonFailedUnsubscribe,
-			"Authorization error getting SQS queue. Ignoring: %s", toErrMsg(err))
+		// event.Warn(ctx, ReasonFailedUnsubscribe,
+		// 	"Authorization error getting SQS queue. Ignoring: %s", toErrMsg(err))
 		return nil
 	case err != nil:
-		return reconciler.NewEvent(corev1.EventTypeWarning, ReasonFailedUnsubscribe,
-			"Failed to determine URL of SQS queue: %s", toErrMsg(err))
+		return fmt.Errorf("failed to determine URL of SQS queue: %w", toErrMsg(err))
 	}
 
-	owns, err := assertOwnership(cli, queueURL, typedSrc)
+	owns, err := assertOwnership(cli, queueURL, src)
 	if err != nil {
-		return reconciler.NewEvent(corev1.EventTypeWarning, ReasonFailedUnsubscribe,
-			"Failed to verify owner of SQS queue: %s", toErrMsg(err))
+		return fmt.Errorf("failed to verify owner of SQS queue: %w", toErrMsg(err))
+		// return reconciler.NewEvent(corev1.EventTypeWarning, ReasonFailedUnsubscribe,
+		// 	"Failed to verify owner of SQS queue: %s", toErrMsg(err))
 	}
 
 	if !owns {
-		event.Warn(ctx, ReasonUnsubscribed, "Queue %q is not owned by this source instance, "+
-			"skipping deletion", queueURL)
+		// event.Warn(ctx, ReasonUnsubscribed, "Queue %q is not owned by this source instance, "+
+		// 	"skipping deletion", queueURL)
 		return nil
 	}
 
@@ -146,15 +137,16 @@ func EnsureNoQueue(ctx context.Context, cli sqsiface.SQSAPI) error {
 	case isDenied(err):
 		// it is unlikely that we recover from auth errors in the
 		// finalizer, so we simply record a warning event and return
-		event.Warn(ctx, ReasonFailedUnsubscribe,
-			"Authorization error deleting SQS queue. Ignoring: %s", toErrMsg(err))
+		// event.Warn(ctx, ReasonFailedUnsubscribe,
+		// 	"Authorization error deleting SQS queue. Ignoring: %s", toErrMsg(err))
 		return nil
 	case err != nil:
-		return reconciler.NewEvent(corev1.EventTypeWarning, ReasonFailedUnsubscribe,
-			"Error deleting SQS queue: %s", toErrMsg(err))
+		return fmt.Errorf("error deleting SQS queue: %w", toErrMsg(err))
+		// return reconciler.NewEvent(corev1.EventTypeWarning, ReasonFailedUnsubscribe,
+		// 	"Error deleting SQS queue: %s", toErrMsg(err))
 	}
 
-	event.Normal(ctx, ReasonQueueDeleted, "Deleted SQS queue %q", queueURL)
+	// event.Normal(ctx, ReasonQueueDeleted, "Deleted SQS queue %q", queueURL)
 
 	return nil
 }
